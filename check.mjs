@@ -1,20 +1,20 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v5
-//  Log must start with "=== xior check.mjs v4 ===".
+//  Xior Groningen availability watcher  —  VERSION v6
+//  Log must start with "=== xior check.mjs v6 ===".
 // ============================================================
 //
-//  v4 changes:
-//   - Loads the overview page FIRST to pick up cookies, which gets us past
-//     the 403 that was blocking Eendrachtskade.
-//   - "Rooms open" now needs POSITIVE proof (the availability widget is
-//     showing) instead of merely not seeing the words "fully booked".
-//   - On the 1st of the month it repeats the check every minute for the
-//     whole run, since that is Xior's reported release day.
+//  How it decides:
+//   - Loads the overview page first to pick up cookies (beats the 403).
+//   - Opens the "Check availability" pop-up, and reads INSIDE the booking
+//     widget's iframe, which is where the real answer lives.
+//   - Only claims rooms are open on positive proof (a unit table), never on
+//     the mere absence of the words "fully booked".
+//   - On the 1st of the month it re-checks every minute for the whole run.
 
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
 // Order matters: 'overview' is loaded first purely to warm up cookies.
@@ -41,6 +41,9 @@ const WIDGET   = /(contract start|room number|basic rent|kamernummer|beschikbare
 // A page is only trustworthy once one of these appears.
 const READY    = new RegExp(`(${SOLD_OUT.source})|(${WIDGET.source})|(check availability|student stay|bookings open)`, 'i');
 
+// Wording that hints at a future release — worth telling you about early.
+const ANNOUNCE = /(early '2[67]|coming soon|opens? on|open soon|available from|januar|februar|jan 202[67]|feb 202[67]|202[67])/gi;
+
 const STATE_FILE = 'state.json';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const TG_TOKEN = process.env.TELEGRAM_TOKEN;
@@ -61,6 +64,7 @@ function signal(text) {
   return {
     soldOut,
     open: WIDGET.test(text) && !soldOut,   // positive proof, not absence of bad news
+    announce: [...new Set((text.match(ANNOUNCE) || []).map(x => x.toLowerCase()))].sort().join('|'),
     prices: [...text.matchAll(/€\s?\d[\d.,]*/g)].map(m=>m[0].replace(/\s/g,'')).slice(0,40).join('|'),
     dates:  [...text.matchAll(/\b\d{1,2}[-/ ](?:[A-Za-z]{3,9}|\d{1,2})[-/ ]\d{2,4}\b/g)].map(m=>m[0]).slice(0,20).join('|'),
   };
@@ -115,6 +119,17 @@ async function loadReady(page, url, attempts = 3, polls = 6) {
   throw new Error(`no real content (last ${last.length} chars: "${last.slice(0,40).replace(/\s+/g,' ')}")`);
 }
 
+// The booking widget renders inside an iframe, so the main document's text
+// does not contain it. Gather text from every frame on the page.
+async function allText(page) {
+  const parts = [];
+  for (const f of page.frames()) {
+    const t = await f.evaluate(() => document.body ? document.body.innerText : '').catch(()=> '');
+    if (t && t.trim()) parts.push(t);
+  }
+  return parts.join(' \n ').replace(/\s+/g,' ').trim();
+}
+
 // Xior hides the real answer behind the "Check availability" button: the page
 // itself always shows that button, and only the pop-up says either "fully
 // booked" or lists bookable units. So we open it, exactly as a person would.
@@ -125,9 +140,13 @@ async function readTarget(page, t) {
                   .or(page.getByRole('link', { name: /check availability/i })).first();
   if (await btn.count().catch(()=>0)) {
     await btn.click({ timeout:8000 }).catch(()=>{});
-    await sleep(4500);
-    const after = await page.evaluate(() => document.body.innerText).catch(()=> '');
-    if (after) text = (text + ' ' + after).replace(/\s+/g,' ').trim();
+    // The widget loads its own iframe; give it time, and look a few times.
+    for (let i = 0; i < 5; i++) {
+      await sleep(3000);
+      const after = await allText(page);
+      if (after) text = (text + ' ' + after).replace(/\s+/g,' ').trim();
+      if (SOLD_OUT.test(text) || WIDGET.test(text)) break;
+    }
   } else {
     console.log(`  (no "check availability" button found on ${t.id})`);
   }
@@ -173,8 +192,9 @@ async function onePass(ctx, prev, pass, passes) {
       next[t.id] = { ...sig, ok:true, checked:new Date().toISOString() };
       const old = prev[t.id];
       if (sig.open && (!old?.ok || !old.open))                     changed.push({ t, kind:'OPEN' });
-      else if (old?.ok && (old.prices !== sig.prices || old.dates !== sig.dates)) changed.push({ t, kind:'EDIT' });
+      else if (old?.ok && old.announce !== sig.announce) changed.push({ t, kind:'EDIT' });
       console.log(`${sig.open ? 'OPEN!!!  ' : sig.soldOut ? 'soldout  ' : 'unclear  '} ${t.id}`);
+      if (!sig.open && !sig.soldOut) console.log(`  ...saw: "${text.slice(0,180)}"`);
     } catch (e) {
       failures++;
       next[t.id] = { ...(prev[t.id]||{}), ok:false, error:String(e.message).slice(0,200), checked:new Date().toISOString() };
