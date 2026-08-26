@@ -1,6 +1,6 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v9
-//  Log must start with "=== xior check.mjs v9 ===".
+//  Xior Groningen availability watcher  —  VERSION v10
+//  Log must start with "=== xior check.mjs v10 ===".
 // ============================================================
 //
 //  How it decides:
@@ -14,7 +14,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v9';
+const VERSION = 'v10';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
 // Order matters: 'overview' is loaded first purely to warm up cookies.
@@ -60,7 +60,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // is the signal — no wording required.
 function offerSlice(text) {
   const i = text.search(/stays that suit your needs/i);
-  const raw = (i > -1 ? text.slice(i, i + 4000) : text.slice(0, 4000)).toLowerCase();
+  if (i < 0) return null;                     // no room-offer section: don't fingerprint
+  const raw = text.slice(i, i + 4000).toLowerCase();
   return raw.replace(/[^a-z0-9€ ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function fingerprint(str) {
@@ -79,8 +80,8 @@ function signal(text, staticText) {
   const slice = offerSlice(staticText || text);
   return {
     soldOut,
-    offer: fingerprint(slice),
-    offerLen: slice.length,
+    offer: slice ? fingerprint(slice) : null,
+    offerLen: slice ? slice.length : 0,
     open: WIDGET.test(text) && !soldOut,   // positive proof, not absence of bad news
     announce: [...new Set((text.match(ANNOUNCE) || []).map(x => x.toLowerCase()))].sort().join('|'),
     prices: [...text.matchAll(/€\s?\d[\d.,]*/g)].map(m=>m[0].replace(/\s/g,'')).slice(0,40).join('|'),
@@ -239,13 +240,13 @@ async function onePass(ctx, prev, pass, passes) {
       next[t.id] = { ...sig, ok:true, checked:new Date().toISOString() };
       const old = prev[t.id];
       if (sig.open && (!old?.ok || !old.open))                       changed.push({ t, kind:'OPEN' });
-      else if (old?.ok && old.offer !== undefined && old.offer !== sig.offer)         changed.push({ t, kind:'OFFER' });
+      else if (old?.ok && sig.offer && old.offer && old.offer !== sig.offer)          changed.push({ t, kind:'OFFER' });
       else if (old?.ok && old.announce !== undefined && old.announce !== sig.announce) changed.push({ t, kind:'EDIT' });
       console.log(`${sig.open ? 'OPEN!!!  ' : sig.soldOut ? 'soldout  ' : 'unclear  '} ${t.id}`);
       if (!sig.open && !sig.soldOut) {
         const named = new RegExp(t.id.split('-')[0], 'i').test(text);
         const i = text.search(/availab|fully|booked|kamer|room type|comfy|deluxe/i);
-        console.log(`  ...offer fingerprint=${sig.offer} (${sig.offerLen} chars), name found=${named}`);
+        console.log(`  ...offer fingerprint=${sig.offer || 'n/a'} (${sig.offerLen} chars), name found=${named}`);
       }
     } catch (e) {
       failures++;
