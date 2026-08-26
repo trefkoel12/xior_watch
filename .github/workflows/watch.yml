@@ -1,0 +1,51 @@
+name: Xior watch
+
+on:
+  schedule:
+    # Normal cadence: every 30 minutes. Energy-frugal, and fast enough for a
+    # market where units sit for hours once released.
+    - cron: '*/30 * * * *'
+    # Release day: Xior reportedly batch-releases around the 1st of the month,
+    # which is the one window a human can beat the brokers' bots. Check every
+    # 5 minutes that day.
+    - cron: '*/5 * 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xior-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y >/dev/null 2>&1 || true
+          npm install --no-save playwright@1.47.2
+          npx playwright install --with-deps chromium
+
+      - name: Check availability
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: node check.mjs
+
+      - name: Save state
+        run: |
+          git config user.name  "xior-watch"
+          git config user.email "actions@users.noreply.github.com"
+          git add state.json
+          git diff --staged --quiet || git commit -m "state: $(date -u +%FT%TZ)"
+          git push || true
