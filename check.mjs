@@ -1,6 +1,6 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v6
-//  Log must start with "=== xior check.mjs v6 ===".
+//  Xior Groningen availability watcher  —  VERSION v7
+//  Log must start with "=== xior check.mjs v7 ===".
 // ============================================================
 //
 //  How it decides:
@@ -14,7 +14,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
 // Order matters: 'overview' is loaded first purely to warm up cookies.
@@ -119,6 +119,15 @@ async function loadReady(page, url, attempts = 3, polls = 6) {
   throw new Error(`no real content (last ${last.length} chars: "${last.slice(0,40).replace(/\s+/g,' ')}")`);
 }
 
+// A cookie bar or the "view this page in Français" prompt can sit on top of
+// the page and eat the click that opens the availability widget.
+async function dismissBanners(page) {
+  for (const rx of [/^accept/i, /accept all/i, /akkoord/i, /^agree/i, /allow all/i, /continue in english/i, /^stay/i]) {
+    const b = page.getByRole('button', { name: rx }).first();
+    if (await b.count().catch(()=>0)) { await b.click({ timeout:3000 }).catch(()=>{}); await sleep(700); }
+  }
+}
+
 // The booking widget renders inside an iframe, so the main document's text
 // does not contain it. Gather text from every frame on the page.
 async function allText(page) {
@@ -136,17 +145,20 @@ async function allText(page) {
 async function readTarget(page, t) {
   let text = await loadReady(page, t.url);
   if (!t.click) return text;
+  await dismissBanners(page);
   const btn = page.getByRole('button', { name: /check availability/i })
-                  .or(page.getByRole('link', { name: /check availability/i })).first();
+                  .or(page.getByRole('link', { name: /check availability/i }))
+                  .or(page.getByText(/check availability/i)).first();
   if (await btn.count().catch(()=>0)) {
     await btn.click({ timeout:8000 }).catch(()=>{});
     // The widget loads its own iframe; give it time, and look a few times.
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       await sleep(3000);
       const after = await allText(page);
       if (after) text = (text + ' ' + after).replace(/\s+/g,' ').trim();
       if (SOLD_OUT.test(text) || WIDGET.test(text)) break;
     }
+    console.log(`  ${t.id}: ${page.frames().length} frame(s) -> ${page.frames().map(f=>f.url().replace(/^https?:\/\//,'').slice(0,45)).join(' | ').slice(0,240)}`);
   } else {
     console.log(`  (no "check availability" button found on ${t.id})`);
   }
@@ -192,9 +204,14 @@ async function onePass(ctx, prev, pass, passes) {
       next[t.id] = { ...sig, ok:true, checked:new Date().toISOString() };
       const old = prev[t.id];
       if (sig.open && (!old?.ok || !old.open))                     changed.push({ t, kind:'OPEN' });
-      else if (old?.ok && old.announce !== sig.announce) changed.push({ t, kind:'EDIT' });
+      else if (old?.ok && old.announce !== undefined && old.announce !== sig.announce) changed.push({ t, kind:'EDIT' });
       console.log(`${sig.open ? 'OPEN!!!  ' : sig.soldOut ? 'soldout  ' : 'unclear  '} ${t.id}`);
-      if (!sig.open && !sig.soldOut) console.log(`  ...saw: "${text.slice(0,180)}"`);
+      if (!sig.open && !sig.soldOut) {
+        const named = new RegExp(t.id.split('-')[0], 'i').test(text);
+        const i = text.search(/availab|fully|booked|kamer|room type|comfy|deluxe/i);
+        console.log(`  ...len=${text.length} propertyNameFound=${named} keywordAt=${i}`);
+        console.log(`  ...saw: "${(i > -1 ? text.slice(Math.max(0,i-100), i+300) : text.slice(0,300))}"`);
+      }
     } catch (e) {
       failures++;
       next[t.id] = { ...(prev[t.id]||{}), ok:false, error:String(e.message).slice(0,200), checked:new Date().toISOString() };
