@@ -1,5 +1,5 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v4
+//  Xior Groningen availability watcher  —  VERSION v5
 //  Log must start with "=== xior check.mjs v4 ===".
 // ============================================================
 //
@@ -14,30 +14,32 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
 // Order matters: 'overview' is loaded first purely to warm up cookies.
 const TARGETS = [
   { id:'overview',         label:'Xior Groningen overview (release banners)',
     url:'https://www.xiorstudenthousing.eu/netherlands/groningen/' },
-  { id:'eendrachtskade',   label:'Eendrachtskade — TOP TARGET (Comfy studio, from €615 base)',
+  { click:true, id:'eendrachtskade',   label:'Eendrachtskade — TOP TARGET (Comfy studio, from €615 base)',
     url:'https://www.xiorstudenthousing.eu/netherlands/groningen/eendrachtskade-student-accommodation/' },
-  { id:'zernike-tower',    label:'Zernike Tower (from €690 base)',
+  { click:true, id:'zernike-tower',    label:'Zernike Tower (from €690 base)',
     url:'https://www.xiorstudenthousing.eu/netherlands/groningen/zernike-tower-student-accommodation/' },
-  { id:'oosterhamrikkade', label:'Oosterhamrikkade (from €866 base)',
+  { click:true, id:'oosterhamrikkade', label:'Oosterhamrikkade (from €866 base)',
     url:'https://www.xiorstudenthousing.eu/netherlands/groningen/oosterhamrikkade-student-accommodation/' },
-  { id:'zernike-short',    label:'Zernike Tower Short Stay (6-month, ~€1,370 all-in)',
+  { click:true, id:'zernike-short',    label:'Zernike Tower Short Stay (6-month, ~€1,370 all-in)',
     url:'https://www.xiorstudenthousing.eu/netherlands/groningen/zernike-tower-short-stay/' },
   { id:'social-hub',       label:'The Social Hub Groningen (student booking)',
     url:'https://www.thesocialhub.co/book-student-room/?hotelId=GRO01' },
 ];
 
 const SOLD_OUT = /(fully booked|full for now|volgeboekt|no rooms available|geen kamers beschikbaar|bookings open soon|currently unavailable|notified when a room becomes available)/i;
-// Positive proof that rooms can be booked right now.
-const WIDGET   = /(check availability|select your room|contract start|available rooms|kies je kamer)/i;
+// Positive proof that actual units are listed. These words only appear in the
+// unit table itself (Room number | m2 | Contract start date | Basic rent),
+// never on a page that is merely offering a "check availability" button.
+const WIDGET   = /(contract start|room number|basic rent|kamernummer|beschikbare kamers)/i;
 // A page is only trustworthy once one of these appears.
-const READY    = new RegExp(`(${SOLD_OUT.source})|(${WIDGET.source})`, 'i');
+const READY    = new RegExp(`(${SOLD_OUT.source})|(${WIDGET.source})|(check availability|student stay|bookings open)`, 'i');
 
 const STATE_FILE = 'state.json';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
@@ -113,6 +115,25 @@ async function loadReady(page, url, attempts = 3, polls = 6) {
   throw new Error(`no real content (last ${last.length} chars: "${last.slice(0,40).replace(/\s+/g,' ')}")`);
 }
 
+// Xior hides the real answer behind the "Check availability" button: the page
+// itself always shows that button, and only the pop-up says either "fully
+// booked" or lists bookable units. So we open it, exactly as a person would.
+async function readTarget(page, t) {
+  let text = await loadReady(page, t.url);
+  if (!t.click) return text;
+  const btn = page.getByRole('button', { name: /check availability/i })
+                  .or(page.getByRole('link', { name: /check availability/i })).first();
+  if (await btn.count().catch(()=>0)) {
+    await btn.click({ timeout:8000 }).catch(()=>{});
+    await sleep(4500);
+    const after = await page.evaluate(() => document.body.innerText).catch(()=> '');
+    if (after) text = (text + ' ' + after).replace(/\s+/g,' ').trim();
+  } else {
+    console.log(`  (no "check availability" button found on ${t.id})`);
+  }
+  return text;
+}
+
 async function deepCapture(ctx, t) {
   const res = { rows: [], deepest: t.url, shot: null, note: '' };
   const page = await ctx.newPage();
@@ -147,7 +168,7 @@ async function onePass(ctx, prev, pass, passes) {
   for (const t of TARGETS) {
     const page = await ctx.newPage();
     try {
-      const text = await withTimeout(loadReady(page, t.url), 150000, `load ${t.id}`);
+      const text = await withTimeout(readTarget(page, t), 180000, `load ${t.id}`);
       const sig = signal(text);
       next[t.id] = { ...sig, ok:true, checked:new Date().toISOString() };
       const old = prev[t.id];
