@@ -148,3 +148,53 @@ try {
   for (const t of TARGETS) {
     const page = await ctx.newPage();
     try {
+      const text = await withTimeout(loadReady(page, t.url), 100000, `load ${t.id}`);
+      const sig = signal(text);
+      next[t.id] = { ...sig, ok:true, checked:new Date().toISOString() };
+      const old = prev[t.id];
+      if (old?.ok && old.soldOut && !sig.soldOut)  changed.push({ t, kind:'OPEN' });
+      else if (!old && !sig.soldOut)               changed.push({ t, kind:'OPEN' });
+      else if (old?.ok && (old.prices !== sig.prices || old.dates !== sig.dates)) changed.push({ t, kind:'EDIT' });
+      console.log(`${sig.soldOut ? 'soldout  ' : 'OPEN?    '} ${t.id}`);
+    } catch (e) {
+      failures++;
+      next[t.id] = { ...(prev[t.id]||{}), ok:false, error:String(e.message).slice(0,200), checked:new Date().toISOString() };
+      console.error(`FAILED ${t.id}: ${e.message.slice(0,140)}`);
+    } finally { await page.close().catch(()=>{}); }
+  }
+
+  console.log(`--- phase 2: ${changed.length} change(s) to report ---`);
+  for (const c of changed) {
+    const urgent = c.kind === 'OPEN';
+    let deep = null;
+    if (urgent) {
+      console.log(`  deep look at ${c.t.id}...`);
+      deep = await withTimeout(deepCapture(ctx, c.t), 120000, `deep ${c.t.id}`)
+        .catch(e => ({ rows:[], deepest:c.t.url, shot:null, note:`Deep look timed out (${e.message.slice(0,60)}).` }));
+    }
+    const head = urgent ? `ROOMS MAY BE OPEN — ${c.t.label}` : `Page changed — ${c.t.label}`;
+    const lines = [
+      urgent ? 'Xior is first-come-first-served. Move now.' : 'Prices or dates changed on the page.',
+      '', `Property page: ${c.t.url}`,
+    ];
+    if (deep) {
+      if (deep.deepest && deep.deepest !== c.t.url) lines.push(`Deepest step reached: ${deep.deepest}`);
+      if (deep.rows.length) lines.push('', 'Seen on the page:', ...deep.rows.map(r => `• ${r}`));
+      if (deep.note) lines.push('', deep.note);
+      lines.push('', 'Then: €75 fee immediately → 5 days for contract + first month + 2-month deposit (~€3,300).');
+    }
+    await sendText(head, lines.join('\n'));
+    if (deep?.shot) await sendPhoto(deep.shot, `${head}\n${deep.deepest}`);
+  }
+} catch (e) {
+  console.error('RUN ERROR:', e.message);
+} finally {
+  if (browser) await browser.close().catch(()=>{});
+}
+
+fs.writeFileSync(STATE_FILE, JSON.stringify(next, null, 2) + '\n');
+if (failures === TARGETS.length) {
+  await sendText('Xior watcher is blind', 'Every page failed to load. Silence from now on would NOT mean "no rooms" — check the GitHub Actions log.');
+}
+console.log(`done — ${changed.length} change(s), ${failures} failure(s)`);
+process.exit(0);
