@@ -1,42 +1,50 @@
 {
+  "overview": {
+    "soldOut": true,
+    "open": false,
+    "prices": "€400|€600|€800|€1000",
+    "dates": "20 August 2026|22 July 2026|32 3 257",
+    "ok": true,
+    "checked": "2026-08-26T13:33:18.757Z"
+  },
   "eendrachtskade": {
-    "ok": false,
-    "error": "no real content (last 13 chars: \"403 Forbidden\")",
-    "checked": "2026-08-26T13:23:37.783Z"
+    "soldOut": false,
+    "open": true,
+    "prices": "€615|€800|€190,0|€60,0|€17,50|€12,50|€50,00|€100,00|€200,00|€330,00|€380,00|€480,00",
+    "dates": "31 88 600|32 3 257",
+    "ok": true,
+    "checked": "2026-08-26T13:33:22.893Z"
   },
   "zernike-tower": {
     "soldOut": false,
-    "prices": "€690|€725|€97,5|€60,0|€17,50|€50,00|€255,00|€690,00|€725,00|€97,5|€60,0|€17,50|€50,00|€255,00|€400|€600|€800|€1000",
-    "dates": "20 August 2026|22 July 2026|31 88 600|32 3 257",
+    "open": true,
+    "prices": "€690|€725|€97,5|€60,0|€17,50|€50,00|€255,00",
+    "dates": "31 88 600|32 3 257",
     "ok": true,
-    "checked": "2026-08-26T13:23:42.446Z"
+    "checked": "2026-08-26T13:33:26.872Z"
   },
   "oosterhamrikkade": {
     "soldOut": false,
+    "open": true,
     "prices": "€866|€105,0|€50,0|€32,50|€15,00|€50,00|€252,50",
     "dates": "31 88 600|32 3 257",
     "ok": true,
-    "checked": "2026-08-26T13:23:46.864Z"
+    "checked": "2026-08-26T13:33:30.826Z"
   },
   "zernike-short": {
     "soldOut": true,
+    "open": false,
     "prices": "€1370|€1480",
     "dates": "31 88 600|32 3 257",
     "ok": true,
-    "checked": "2026-08-26T13:24:13.078Z"
-  },
-  "overview": {
-    "soldOut": true,
-    "prices": "",
-    "dates": "32 3 257",
-    "ok": true,
-    "checked": "2026-08-26T13:24:17.487Z"
+    "checked": "2026-08-26T13:33:34.806Z"
   },
   "social-hub": {
     "soldOut": true,
+    "open": false,
     "prices": "",
     "dates": "",
     "ok": true,
-    "checked": "2026-08-26T13:24:21.606Z"
+    "checked": "2026-08-26T13:33:39.048Z"
   }
 }
