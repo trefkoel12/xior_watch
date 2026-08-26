@@ -1,6 +1,6 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v7
-//  Log must start with "=== xior check.mjs v7 ===".
+//  Xior Groningen availability watcher  —  VERSION v8
+//  Log must start with "=== xior check.mjs v8 ===".
 // ============================================================
 //
 //  How it decides:
@@ -14,7 +14,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v7';
+const VERSION = 'v8';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
 // Order matters: 'overview' is loaded first purely to warm up cookies.
@@ -103,7 +103,7 @@ async function sendPhoto(png, caption) {
 
 // Xior sits behind Cloudflare: expect "403 Forbidden" or a short holding page
 // before the real content. Retry patiently rather than believing the first reply.
-async function loadReady(page, url, attempts = 3, polls = 6) {
+async function loadReady(page, url, attempts = 4, polls = 6) {
   let last = '';
   for (let i = 1; i <= attempts; i++) {
     try { await page.goto(url, { waitUntil:'domcontentloaded', timeout:45000 }); }
@@ -143,25 +143,42 @@ async function allText(page) {
 // itself always shows that button, and only the pop-up says either "fully
 // booked" or lists bookable units. So we open it, exactly as a person would.
 async function readTarget(page, t) {
+  const apiTexts = [], apiUrls = [];
+  page.on('response', async (r) => {
+    try {
+      const u = r.url();
+      if (!/avail|unit|room|lease|rentcafe|yardi|booking/i.test(u)) return;
+      if (!/json|javascript|text/i.test(r.headers()['content-type'] || '')) return;
+      const b = await r.text();
+      if (b && b.length > 20 && b.length < 300000) { apiUrls.push(u.replace(/^https?:\/\//,'').slice(0,70)); apiTexts.push(b.slice(0,6000)); }
+    } catch {}
+  });
   let text = await loadReady(page, t.url);
   if (!t.click) return text;
   await dismissBanners(page);
-  const btn = page.getByRole('button', { name: /check availability/i })
-                  .or(page.getByRole('link', { name: /check availability/i }))
-                  .or(page.getByText(/check availability/i)).first();
-  if (await btn.count().catch(()=>0)) {
-    await btn.click({ timeout:8000 }).catch(()=>{});
-    // The widget loads its own iframe; give it time, and look a few times.
-    for (let i = 0; i < 8; i++) {
-      await sleep(3000);
+  const cands = page.getByRole('button', { name: /check availability/i })
+                    .or(page.getByRole('link', { name: /check availability/i }));
+  const n = await cands.count().catch(()=>0);
+  console.log(`  ${t.id}: ${n} "check availability" control(s)`);
+
+  for (let k = 0; k < Math.min(n, 4); k++) {
+    await cands.nth(k).click({ timeout:8000 }).catch(()=>{});
+    for (let i = 0; i < 6; i++) {
+      await sleep(2500);
       const after = await allText(page);
       if (after) text = (text + ' ' + after).replace(/\s+/g,' ').trim();
       if (SOLD_OUT.test(text) || WIDGET.test(text)) break;
     }
-    console.log(`  ${t.id}: ${page.frames().length} frame(s) -> ${page.frames().map(f=>f.url().replace(/^https?:\/\//,'').slice(0,45)).join(' | ').slice(0,240)}`);
-  } else {
-    console.log(`  (no "check availability" button found on ${t.id})`);
+    if (SOLD_OUT.test(text) || WIDGET.test(text)) { console.log(`  answered after control #${k+1}`); break; }
+    await page.keyboard.press('Escape').catch(()=>{});
+    await sleep(800);
   }
+
+  if (apiTexts.length) {
+    console.log(`  captured ${apiTexts.length} data response(s): ${apiUrls.slice(0,4).join(' | ').slice(0,240)}`);
+    text = (text + ' ' + apiTexts.join(' ')).replace(/\s+/g,' ').trim();
+  }
+  console.log(`  ${t.id}: ${page.frames().length} frame(s)`);
   return text;
 }
 
