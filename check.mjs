@@ -1,6 +1,6 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v8
-//  Log must start with "=== xior check.mjs v8 ===".
+//  Xior Groningen availability watcher  —  VERSION v9
+//  Log must start with "=== xior check.mjs v9 ===".
 // ============================================================
 //
 //  How it decides:
@@ -14,7 +14,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
 // Order matters: 'overview' is loaded first purely to warm up cookies.
@@ -53,16 +53,34 @@ const NTFY     = process.env.NTFY_TOPIC;
 console.log(`telegram configured: ${TG_TOKEN ? 'token yes' : 'TOKEN MISSING'} / ${TG_CHAT ? 'chat id yes' : 'CHAT ID MISSING'}`);
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Xior does not put "fully booked" anywhere we can read on three of the
+// pages, so instead of interpreting wording we fingerprint the room-offer
+// section itself. Rooms appearing MUST change it, so a changed fingerprint
+// is the signal — no wording required.
+function offerSlice(text) {
+  const i = text.search(/stays that suit your needs/i);
+  const raw = (i > -1 ? text.slice(i, i + 4000) : text.slice(0, 4000)).toLowerCase();
+  return raw.replace(/[^a-z0-9€ ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function fingerprint(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
 const readState = () => { try { return JSON.parse(fs.readFileSync(STATE_FILE,'utf8')); } catch { return {}; } };
 const saveState = s => fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2) + '\n');
 const withTimeout = (p, ms, label) => Promise.race([
   p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} exceeded ${ms}ms`)), ms)),
 ]);
 
-function signal(text) {
+function signal(text, staticText) {
   const soldOut = SOLD_OUT.test(text);
+  const slice = offerSlice(staticText || text);
   return {
     soldOut,
+    offer: fingerprint(slice),
+    offerLen: slice.length,
     open: WIDGET.test(text) && !soldOut,   // positive proof, not absence of bad news
     announce: [...new Set((text.match(ANNOUNCE) || []).map(x => x.toLowerCase()))].sort().join('|'),
     prices: [...text.matchAll(/€\s?\d[\d.,]*/g)].map(m=>m[0].replace(/\s/g,'')).slice(0,40).join('|'),
@@ -153,8 +171,9 @@ async function readTarget(page, t) {
       if (b && b.length > 20 && b.length < 300000) { apiUrls.push(u.replace(/^https?:\/\//,'').slice(0,70)); apiTexts.push(b.slice(0,6000)); }
     } catch {}
   });
-  let text = await loadReady(page, t.url);
-  if (!t.click) return text;
+  const staticText = await loadReady(page, t.url);
+  let text = staticText;
+  if (!t.click) return { text, staticText };
   await dismissBanners(page);
   const cands = page.getByRole('button', { name: /check availability/i })
                     .or(page.getByRole('link', { name: /check availability/i }));
@@ -178,8 +197,7 @@ async function readTarget(page, t) {
     console.log(`  captured ${apiTexts.length} data response(s): ${apiUrls.slice(0,4).join(' | ').slice(0,240)}`);
     text = (text + ' ' + apiTexts.join(' ')).replace(/\s+/g,' ').trim();
   }
-  console.log(`  ${t.id}: ${page.frames().length} frame(s)`);
-  return text;
+  return { text, staticText };
 }
 
 async function deepCapture(ctx, t) {
@@ -216,18 +234,18 @@ async function onePass(ctx, prev, pass, passes) {
   for (const t of TARGETS) {
     const page = await ctx.newPage();
     try {
-      const text = await withTimeout(readTarget(page, t), 180000, `load ${t.id}`);
-      const sig = signal(text);
+      const { text, staticText } = await withTimeout(readTarget(page, t), 180000, `load ${t.id}`);
+      const sig = signal(text, staticText);
       next[t.id] = { ...sig, ok:true, checked:new Date().toISOString() };
       const old = prev[t.id];
-      if (sig.open && (!old?.ok || !old.open))                     changed.push({ t, kind:'OPEN' });
+      if (sig.open && (!old?.ok || !old.open))                       changed.push({ t, kind:'OPEN' });
+      else if (old?.ok && old.offer !== undefined && old.offer !== sig.offer)         changed.push({ t, kind:'OFFER' });
       else if (old?.ok && old.announce !== undefined && old.announce !== sig.announce) changed.push({ t, kind:'EDIT' });
       console.log(`${sig.open ? 'OPEN!!!  ' : sig.soldOut ? 'soldout  ' : 'unclear  '} ${t.id}`);
       if (!sig.open && !sig.soldOut) {
         const named = new RegExp(t.id.split('-')[0], 'i').test(text);
         const i = text.search(/availab|fully|booked|kamer|room type|comfy|deluxe/i);
-        console.log(`  ...len=${text.length} propertyNameFound=${named} keywordAt=${i}`);
-        console.log(`  ...saw: "${(i > -1 ? text.slice(Math.max(0,i-100), i+300) : text.slice(0,300))}"`);
+        console.log(`  ...offer fingerprint=${sig.offer} (${sig.offerLen} chars), name found=${named}`);
       }
     } catch (e) {
       failures++;
@@ -238,16 +256,20 @@ async function onePass(ctx, prev, pass, passes) {
 
   console.log(`--- ${changed.length} change(s) to report ---`);
   for (const c of changed) {
-    const urgent = c.kind === 'OPEN';
+    const urgent = c.kind === 'OPEN' || c.kind === 'OFFER';
     let deep = null;
     if (urgent) {
       console.log(`  deep look at ${c.t.id}...`);
       deep = await withTimeout(deepCapture(ctx, c.t), 120000, `deep ${c.t.id}`)
         .catch(e => ({ rows:[], deepest:c.t.url, shot:null, note:`Deep look timed out (${e.message.slice(0,60)}).` }));
     }
-    const head = urgent ? `ROOMS OPEN — ${c.t.label}` : `Page changed — ${c.t.label}`;
+    const head = c.kind === 'OPEN'  ? `ROOMS OPEN — ${c.t.label}`
+               : c.kind === 'OFFER' ? `ROOM LISTING CHANGED — ${c.t.label}`
+               :                      `Page changed — ${c.t.label}`;
     const lines = [
-      urgent ? 'Xior is first-come-first-served. Move now.' : 'Prices or dates changed on the page.',
+      c.kind === 'OPEN'  ? 'Units are listed. Xior is first-come-first-served — move now.'
+    : c.kind === 'OFFER' ? 'The room section changed, which is how a new release shows up. Open it and click Check availability.'
+    :                      'Wording about upcoming releases changed.',
       '', `Property page: ${c.t.url}`,
     ];
     if (deep) {
