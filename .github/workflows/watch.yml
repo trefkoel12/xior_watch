@@ -2,13 +2,22 @@ name: Xior watch
 
 on:
   schedule:
-    # Normal cadence: every 30 minutes. Energy-frugal, and fast enough for a
-    # market where units sit for hours once released.
-    - cron: '*/30 * * * *'
-    # Release day: Xior reportedly batch-releases around the 1st of the month,
-    # which is the one window a human can beat the brokers' bots. Check every
-    # 5 minutes that day.
-    - cron: '*/5 * 1 * *'
+    # ---- Ordinary days ----------------------------------------------------
+    # Three times an hour, deliberately NOT on :00. GitHub's scheduler is at
+    # its busiest at the top of every hour, and the docs are explicit that
+    # runs are delayed then and that queued jobs may be dropped. Odd minutes
+    # sit in the quiet gaps, so far more of these actually fire.
+    - cron: '8,28,48 * * * *'
+
+    # ---- Release day (the 1st), in GRONINGEN time -------------------------
+    # GitHub cron is UTC. The Dutch 1st begins at 23:00 UTC on the last day of
+    # the previous month, so a plain '1 * *' schedule would sit idle through
+    # midnight in Groningen -- the exact hour a batch release would land.
+    #
+    # 23:0x-23:5x UTC on the 28th-31st  =  00:00-01:00 Amsterdam on the 1st.
+    - cron: '2-59/5 23 28,29,30,31 * *'
+    # 00:0x-22:5x UTC on the 1st        =  01:00-23:59 Amsterdam on the 1st.
+    - cron: '2-59/5 0-22 1 * *'
   workflow_dispatch:
 
 permissions:
@@ -21,13 +30,17 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # An ordinary run takes ~6 minutes. A release-day run repeats the whole
+    # check 5 times with 60s gaps, so it needs room for ~35. The old 20-minute
+    # cap would have killed release-day runs partway through -- on the one day
+    # that matters.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Playwright Chromium
         run: |
