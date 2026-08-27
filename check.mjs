@@ -1,5 +1,5 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v10
+//  Xior Groningen availability watcher  —  VERSION v11
 //  Log must start with "=== xior check.mjs v10 ===".
 // ============================================================
 //
@@ -14,7 +14,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v10';
+const VERSION = 'v11';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
 // Order matters: 'overview' is loaded first purely to warm up cookies.
@@ -288,8 +288,15 @@ async function onePass(ctx, prev, pass, passes) {
 // Xior reportedly batch-releases around the 1st of the month. GitHub cannot
 // schedule tighter than every 5 minutes, so on that day we stay in one run
 // and re-check every minute instead.
-const isReleaseDay = new Date().getUTCDate() === 1;
+//
+// The 1st that matters is the DUTCH 1st, not the UTC one. In February the
+// Netherlands is UTC+1, so Groningen midnight on the 1st is 23:00 UTC on the
+// 31st -- exactly the hour a release would land, and exactly the hour a
+// getUTCDate() check would have called an ordinary day.
+const nlToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Amsterdam' });
+const isReleaseDay = nlToday.endsWith('-01');
 const PASSES = isReleaseDay ? 5 : 1;
+console.log(`date in Groningen: ${nlToday}${isReleaseDay ? '  <-- RELEASE DAY' : ''}`);
 if (isReleaseDay) console.log('release day (1st): repeating the check every 60s within this run');
 
 let state = readState();
