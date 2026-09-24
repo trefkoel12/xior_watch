@@ -3,11 +3,10 @@ name: Xior watch
 on:
   schedule:
     # ---- Ordinary days ----------------------------------------------------
-    # Three times an hour, deliberately NOT on :00. GitHub's scheduler is at
-    # its busiest at the top of every hour, and the docs are explicit that
-    # runs are delayed then and that queued jobs may be dropped. Odd minutes
-    # sit in the quiet gaps, so far more of these actually fire.
-    - cron: '8,28,48 * * * *'
+    # v12 note: the Google Apps Script trigger is the real scheduler and now
+    # fires reliably. This hourly cron is only a backstop in case it dies, so
+    # the two do not double up on ordinary days.
+    - cron: '18 * * * *'
 
     # ---- Release day (the 1st), in GRONINGEN time -------------------------
     # GitHub cron is UTC. The Dutch 1st begins at 23:00 UTC on the last day of
