@@ -1,93 +1,80 @@
 // ============================================================
-//  Xior Groningen availability watcher  —  VERSION v11
-//  Log must start with "=== xior check.mjs v10 ===".
+//  Xior Groningen availability watcher  —  VERSION v12
 // ============================================================
 //
-//  How it decides:
-//   - Loads the overview page first to pick up cookies (beats the 403).
-//   - Opens the "Check availability" pop-up, and reads INSIDE the booking
-//     widget's iframe, which is where the real answer lives.
-//   - Only claims rooms are open on positive proof (a unit table), never on
-//     the mere absence of the words "fully booked".
-//   - On the 1st of the month it re-checks every minute for the whole run.
+//  What changed in v12, and why:
+//    Xior's booking pop-up is a thin wrapper around one WordPress endpoint,
+//    admin-ajax.php?action=yardi_room_availability. It answers with a JSON
+//    object that includes `availability_by_room` — a count of bookable units
+//    per room type — and the server does NOT enforce the Cloudflare Turnstile
+//    token the pop-up sends. So instead of fingerprinting page text (which
+//    fired every time Xior touched the layout), v12 asks that endpoint
+//    directly and alerts only when a count goes from 0 to more than 0.
+//
+//    Gone: fingerprints, wording-change alerts, screenshots, and the
+//    "deepest step reached" crawl. One page load per run to pick up
+//    Cloudflare cookies, then one small request per building.
+//
+//  Answering "is a room available?" is now a number, not an interpretation.
 
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const VERSION = 'v11';
+const VERSION = 'v12';
 console.log(`=== xior check.mjs ${VERSION} ===`);
 
-// Order matters: 'overview' is loaded first purely to warm up cookies.
-const TARGETS = [
-  { id:'overview',         label:'Xior Groningen overview (release banners)',
-    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/' },
-  { click:true, id:'eendrachtskade',   label:'Eendrachtskade — TOP TARGET (Comfy studio, from €615 base)',
-    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/eendrachtskade-student-accommodation/' },
-  { click:true, id:'zernike-tower',    label:'Zernike Tower (from €690 base)',
-    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/zernike-tower-student-accommodation/' },
-  { click:true, id:'oosterhamrikkade', label:'Oosterhamrikkade (from €866 base)',
-    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/oosterhamrikkade-student-accommodation/' },
-  { click:true, id:'zernike-short',    label:'Zernike Tower Short Stay (6-month, ~€1,370 all-in)',
-    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/zernike-tower-short-stay/' },
-  { id:'social-hub',       label:'The Social Hub Groningen (student booking)',
-    url:'https://www.thesocialhub.co/book-student-room/?hotelId=GRO01' },
+// One page load on this origin warms the Cloudflare cookies for everything
+// below. It is not a target; nothing is read from it.
+const WARMUP_URL = 'https://www.xiorstudenthousing.eu/netherlands/groningen/';
+
+// Xior Groningen buildings. Parameters read from each building's page on
+// 24 Sep 2026. `semester` is the Yardi academic-term id the widget submits;
+// note Short Stay uses a different one. `priority` room types get their own
+// alert even when another type was already open.
+const XIOR = [
+  { id:'eendrachtskade', label:'Eendrachtskade — TOP TARGET', pageId:1121, semester:3281,
+    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/eendrachtskade-student-accommodation/',
+    rooms:{ 29888:'Comfy (from €615)', 32266:'Deluxe (from €800)' }, priority:[29888] },
+  { id:'zernike-tower', label:'Zernike Tower', pageId:1119, semester:3281,
+    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/zernike-tower-student-accommodation/',
+    rooms:{ 29907:'Comfy (from €690)', 32267:'Deluxe' }, priority:[29907] },
+  { id:'oosterhamrikkade', label:'Oosterhamrikkade', pageId:1120, semester:3281,
+    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/oosterhamrikkade-student-accommodation/',
+    rooms:{ 29894:'Comfy (from €866)' }, priority:[29894] },
+  { id:'zernike-short', label:'Zernike Tower Short Stay (6-month)', pageId:1118, semester:18429,
+    url:'https://www.xiorstudenthousing.eu/netherlands/groningen/zernike-tower-short-stay/',
+    rooms:{ 32268:'Comfy', 32269:'Deluxe' }, priority:[] },
 ];
 
-const SOLD_OUT = /(fully booked|full for now|volgeboekt|no rooms available|geen kamers beschikbaar|bookings open soon|currently unavailable|notified when a room becomes available)/i;
-// Positive proof that actual units are listed. These words only appear in the
-// unit table itself (Room number | m2 | Contract start date | Basic rent),
-// never on a page that is merely offering a "check availability" button.
-const WIDGET   = /(contract start|room number|basic rent|kamernummer|beschikbare kamers)/i;
-// A page is only trustworthy once one of these appears.
-const READY    = new RegExp(`(${SOLD_OUT.source})|(${WIDGET.source})|(check availability|student stay|bookings open)`, 'i');
-
-// Wording that hints at a future release — worth telling you about early.
-const ANNOUNCE = /(early '2[67]|coming soon|opens? on|open soon|available from|januar|februar|jan 202[67]|feb 202[67]|202[67])/gi;
+// The Social Hub is a different site with no such endpoint. It is judged on
+// its own wording, and only a flip from "sold out" to "not sold out" alerts.
+const SOCIAL_HUB = {
+  id:'social-hub', label:'The Social Hub Groningen',
+  url:'https://www.thesocialhub.co/book-student-room/?hotelId=GRO01',
+};
+const SH_SOLD_OUT = /(fully booked|sold out|no rooms available|bookings open soon|open soon|currently unavailable|notified when)/i;
 
 const STATE_FILE = 'state.json';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const TG_TOKEN = process.env.TELEGRAM_TOKEN;
 const TG_CHAT  = process.env.TELEGRAM_CHAT_ID;
 const NTFY     = process.env.NTFY_TOPIC;
-
 console.log(`telegram configured: ${TG_TOKEN ? 'token yes' : 'TOKEN MISSING'} / ${TG_CHAT ? 'chat id yes' : 'CHAT ID MISSING'}`);
 
+// How many consecutive runs a building may be unreadable before you are told.
+// At one run every ~30 minutes this is roughly three hours.
+const BLIND_AFTER = 6;
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-// Xior does not put "fully booked" anywhere we can read on three of the
-// pages, so instead of interpreting wording we fingerprint the room-offer
-// section itself. Rooms appearing MUST change it, so a changed fingerprint
-// is the signal — no wording required.
-function offerSlice(text) {
-  const i = text.search(/stays that suit your needs/i);
-  if (i < 0) return null;                     // no room-offer section: don't fingerprint
-  const raw = text.slice(i, i + 4000).toLowerCase();
-  return raw.replace(/[^a-z0-9€ ]/g, ' ').replace(/\s+/g, ' ').trim();
+function withTimeout(promise, ms, what) {
+  let t;
+  const killer = new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`${what} timed out after ${ms/1000}s`)), ms); });
+  return Promise.race([promise, killer]).finally(() => clearTimeout(t));
 }
-function fingerprint(str) {
-  let h = 5381;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
-  return h.toString(36);
+function readState() {
+  try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return {}; }
 }
-const readState = () => { try { return JSON.parse(fs.readFileSync(STATE_FILE,'utf8')); } catch { return {}; } };
-const saveState = s => fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2) + '\n');
-const withTimeout = (p, ms, label) => Promise.race([
-  p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} exceeded ${ms}ms`)), ms)),
-]);
-
-function signal(text, staticText) {
-  const soldOut = SOLD_OUT.test(text);
-  const slice = offerSlice(staticText || text);
-  return {
-    soldOut,
-    offer: slice ? fingerprint(slice) : null,
-    offerLen: slice ? slice.length : 0,
-    open: WIDGET.test(text) && !soldOut,   // positive proof, not absence of bad news
-    announce: [...new Set((text.match(ANNOUNCE) || []).map(x => x.toLowerCase()))].sort().join('|'),
-    prices: [...text.matchAll(/€\s?\d[\d.,]*/g)].map(m=>m[0].replace(/\s/g,'')).slice(0,40).join('|'),
-    dates:  [...text.matchAll(/\b\d{1,2}[-/ ](?:[A-Za-z]{3,9}|\d{1,2})[-/ ]\d{2,4}\b/g)].map(m=>m[0]).slice(0,20).join('|'),
-  };
-}
+function saveState(s) { fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); }
 
 async function sendText(title, body) {
   console.log(`notify: ${title}`);
@@ -100,7 +87,7 @@ async function sendText(title, body) {
     try {
       const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
         method:'POST', headers:{'content-type':'application/json'},
-        body: JSON.stringify({ chat_id: TG_CHAT, text: `${title}\n\n${body}`.slice(0,4000) }),
+        body: JSON.stringify({ chat_id: TG_CHAT, text: `${title}\n\n${body}`.slice(0,4000), disable_web_page_preview: true }),
         signal: AbortSignal.timeout(15000),
       });
       console.log('  telegram status', r.status, r.ok ? '(sent)' : `(FAILED: ${(await r.text()).slice(0,200)})`);
@@ -108,21 +95,9 @@ async function sendText(title, body) {
   }
 }
 
-async function sendPhoto(png, caption) {
-  if (!(TG_TOKEN && TG_CHAT) || !png) return;
-  try {
-    const form = new FormData();
-    form.append('chat_id', TG_CHAT);
-    form.append('caption', caption.slice(0,1000));
-    form.append('photo', new Blob([png], { type:'image/png' }), 'availability.png');
-    const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`, { method:'POST', body: form, signal: AbortSignal.timeout(30000) });
-    console.log('  telegram photo status', r.status);
-  } catch (e) { console.error('  telegram photo failed:', e.message); }
-}
-
-// Xior sits behind Cloudflare: expect "403 Forbidden" or a short holding page
-// before the real content. Retry patiently rather than believing the first reply.
-async function loadReady(page, url, attempts = 4, polls = 6) {
+// Load a page and wait until it is real content, not a Cloudflare holding
+// page ("403 Forbidden" is 13 chars; "Performing security check" ~1.3k).
+async function loadReady(page, url, looksReal, attempts = 4, polls = 6) {
   let last = '';
   for (let i = 1; i <= attempts; i++) {
     try { await page.goto(url, { waitUntil:'domcontentloaded', timeout:45000 }); }
@@ -130,193 +105,184 @@ async function loadReady(page, url, attempts = 4, polls = 6) {
     for (let n = 0; n < polls; n++) {
       await sleep(2500);
       last = await page.evaluate(() => document.body ? document.body.innerText : '').catch(()=> '');
-      if (last.length > 800 && READY.test(last)) return last.replace(/\s+/g,' ').trim();
+      if (last.length > 800 && looksReal.test(last)) return last.replace(/\s+/g,' ').trim();
     }
     console.log(`  attempt ${i}: only ${last.length} chars ("${last.slice(0,30).replace(/\s+/g,' ')}")`);
-    if (i < attempts) await sleep(5000 * i);   // back off before trying again
+    if (i < attempts) await sleep(5000 * i);
   }
   throw new Error(`no real content (last ${last.length} chars: "${last.slice(0,40).replace(/\s+/g,' ')}")`);
 }
-
-// A cookie bar or the "view this page in Français" prompt can sit on top of
-// the page and eat the click that opens the availability widget.
 async function dismissBanners(page) {
-  for (const rx of [/^accept/i, /accept all/i, /akkoord/i, /^agree/i, /allow all/i, /continue in english/i, /^stay/i]) {
+  for (const rx of [/reject all/i, /^accept/i, /accept all/i, /akkoord/i, /^agree/i, /allow all/i]) {
     const b = page.getByRole('button', { name: rx }).first();
-    if (await b.count().catch(()=>0)) { await b.click({ timeout:3000 }).catch(()=>{}); await sleep(700); }
+    if (await b.count().catch(()=>0)) { await b.click({ timeout:3000 }).catch(()=>{}); await sleep(500); break; }
   }
 }
 
-// The booking widget renders inside an iframe, so the main document's text
-// does not contain it. Gather text from every frame on the page.
-async function allText(page) {
-  const parts = [];
-  for (const f of page.frames()) {
-    const t = await f.evaluate(() => document.body ? document.body.innerText : '').catch(()=> '');
-    if (t && t.trim()) parts.push(t);
-  }
-  return parts.join(' \n ').replace(/\s+/g,' ').trim();
+// ---------- the actual availability question ----------------------------
+//
+// Runs inside the page so the request carries the site's own cookies. Returns
+// the parsed JSON, or throws if the answer is not JSON (a Cloudflare page).
+async function askXior(page, prop, roomTypeId) {
+  return page.evaluate(async ({ pageId, semester, roomTypeId }) => {
+    const body = new URLSearchParams({
+      action: 'yardi_room_availability', 'cf-turnstile-response': '',
+      property_page_id: String(pageId), room_type_id: String(roomTypeId), semester_id: String(semester),
+    });
+    const r = await fetch('/wp-admin/admin-ajax.php', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+      body,
+    });
+    const text = await r.text();
+    try { return { status: r.status, json: JSON.parse(text) }; }
+    catch { return { status: r.status, json: null, head: text.slice(0, 120) }; }
+  }, { pageId: prop.pageId, semester: prop.semester, roomTypeId });
 }
 
-// Xior hides the real answer behind the "Check availability" button: the page
-// itself always shows that button, and only the pop-up says either "fully
-// booked" or lists bookable units. So we open it, exactly as a person would.
-async function readTarget(page, t) {
-  const apiTexts = [], apiUrls = [];
-  page.on('response', async (r) => {
-    try {
-      const u = r.url();
-      if (!/avail|unit|room|lease|rentcafe|yardi|booking/i.test(u)) return;
-      if (!/json|javascript|text/i.test(r.headers()['content-type'] || '')) return;
-      const b = await r.text();
-      if (b && b.length > 20 && b.length < 300000) { apiUrls.push(u.replace(/^https?:\/\//,'').slice(0,70)); apiTexts.push(b.slice(0,6000)); }
-    } catch {}
-  });
-  const staticText = await loadReady(page, t.url);
-  let text = staticText;
-  if (!t.click) return { text, staticText };
-  await dismissBanners(page);
-  const cands = page.getByRole('button', { name: /check availability/i })
-                    .or(page.getByRole('link', { name: /check availability/i }));
-  const n = await cands.count().catch(()=>0);
-  console.log(`  ${t.id}: ${n} "check availability" control(s)`);
-
-  for (let k = 0; k < Math.min(n, 4); k++) {
-    await cands.nth(k).click({ timeout:8000 }).catch(()=>{});
-    for (let i = 0; i < 6; i++) {
-      await sleep(2500);
-      const after = await allText(page);
-      if (after) text = (text + ' ' + after).replace(/\s+/g,' ').trim();
-      if (SOLD_OUT.test(text) || WIDGET.test(text)) break;
-    }
-    if (SOLD_OUT.test(text) || WIDGET.test(text)) { console.log(`  answered after control #${k+1}`); break; }
-    await page.keyboard.press('Escape').catch(()=>{});
-    await sleep(800);
+// Reduce one building to: known? which room types have units? unit details.
+async function checkXior(page, prop) {
+  const roomIds = Object.keys(prop.rooms);
+  const first = await askXior(page, prop, roomIds[0]);
+  const d = first.json && first.json.data;
+  if (!first.json || first.json.success !== true || !d || typeof d.availability_by_room !== 'object') {
+    const why = first.json ? `success=${first.json.success}` : `non-JSON (${first.status}: "${first.head || ''}")`;
+    throw new Error(`endpoint gave no usable answer — ${why}`);
+  }
+  // Yardi replies 204 when there is simply nothing to list; anything else
+  // unexpected means "don't trust the zeros".
+  const code = d.availability_response && d.availability_response.errorCode;
+  if (code !== undefined && code !== null && code !== 200 && code !== 204) {
+    throw new Error(`Yardi errorCode ${code} (${d.availability_response.errorMessage || ''})`);
   }
 
-  if (apiTexts.length) {
-    console.log(`  captured ${apiTexts.length} data response(s): ${apiUrls.slice(0,4).join(' | ').slice(0,240)}`);
-    text = (text + ' ' + apiTexts.join(' ')).replace(/\s+/g,' ').trim();
+  const byRoom = {};
+  for (const id of roomIds) byRoom[id] = Number(d.availability_by_room[id] ?? 0) || 0;
+  const openTypes = roomIds.filter(id => byRoom[id] > 0);
+
+  // Unit details come back only for the room type we asked about, so ask
+  // again for each open type we did not already ask for.
+  const units = [];
+  const collect = (arr, id) => { for (const u of (arr || [])) units.push({
+    type: prop.rooms[id], name: u.apartmentName || u.floorplanName || '?', sqm: u.sqM || u.sqm || '',
+    date: u.availableDate || 'now', rent: u.minimumRent || '', apply: u.applyOnlineURL || '',
+  }); };
+  if (openTypes.includes(roomIds[0])) collect(d.units, roomIds[0]);
+  for (const id of openTypes) {
+    if (id === roomIds[0]) continue;
+    const more = await askXior(page, prop, id).catch(() => null);
+    collect(more && more.json && more.json.data && more.json.data.units, id);
   }
-  return { text, staticText };
+  return { byRoom, openTypes, units };
 }
 
-async function deepCapture(ctx, t) {
-  const res = { rows: [], deepest: t.url, shot: null, note: '' };
-  const page = await ctx.newPage();
-  try {
-    await loadReady(page, t.url);
-    for (const rx of [/check availability/i, /book now/i, /start booking/i]) {
-      const btn = page.getByRole('button', { name: rx }).first();
-      if (await btn.count().catch(()=>0)) { await btn.click({ timeout:6000 }).catch(()=>{}); await sleep(3000); }
-    }
-    if (page.url() !== t.url) res.deepest = page.url();
-    const text = await page.evaluate(() => document.body.innerText).catch(()=> '');
-    res.rows = text.split('\n').map(l=>l.trim()).filter(l => l.length>3 && l.length<160 && /€\s?\d/.test(l)).slice(0,25);
-    const href = await page.evaluate(() => {
-      const a = [...document.querySelectorAll('a')].find(a => /book|reserve|boek/i.test(a.textContent||'') && a.href && !a.href.endsWith('#'));
-      return a ? a.href : null;
-    }).catch(()=> null);
-    if (href) res.deepest = href;
-    res.shot = await page.screenshot({ fullPage:false, timeout:20000 }).catch(()=> null);
-    if (!res.rows.length) res.note = 'Could not read a unit table automatically — open the link and look.';
-  } catch (e) {
-    res.note = `Deep look failed (${e.message.slice(0,100)}). Use the property link.`;
-  } finally { await page.close().catch(()=>{}); }
-  return res;
+function describeUnits(units) {
+  return units.slice(0, 12).map(u => {
+    const bits = [`${u.type}: ${u.name}`];
+    if (u.sqm)  bits.push(`${u.sqm} m²`);
+    if (u.date) bits.push(`from ${u.date}`);
+    if (u.rent) bits.push(`€${u.rent}`);
+    const line = `• ${bits.join(' · ')}`;
+    return u.apply ? `${line}\n  ${u.apply}` : line;
+  }).join('\n');
 }
 
-async function onePass(ctx, prev, pass, passes) {
-  console.log(`--- pass ${pass}/${passes}: checking pages ---`);
+// ---------- one pass over everything ---------------------------------------
+async function onePass(ctx, prev) {
   const next = {};
-  const changed = [];
-  let failures = 0;
+  const page = await ctx.newPage();
+  let warmed = false;
+  try {
+    console.log('warming cookies on the Groningen overview...');
+    await withTimeout(loadReady(page, WARMUP_URL, /xior|groningen|student/i), 150000, 'warm-up');
+    await dismissBanners(page);
+    warmed = true;
+  } catch (e) {
+    console.error(`warm-up failed: ${e.message.slice(0,140)}`);
+  }
 
-  for (const t of TARGETS) {
-    const page = await ctx.newPage();
+  for (const prop of XIOR) {
+    const old = prev[prop.id] || {};
     try {
-      const { text, staticText } = await withTimeout(readTarget(page, t), 180000, `load ${t.id}`);
-      const sig = signal(text, staticText);
-      next[t.id] = { ...sig, ok:true, checked:new Date().toISOString() };
-      const old = prev[t.id];
-      if (sig.open && (!old?.ok || !old.open))                       changed.push({ t, kind:'OPEN' });
-      else if (old?.ok && sig.offer && old.offer && old.offer !== sig.offer)          changed.push({ t, kind:'OFFER' });
-      else if (old?.ok && old.announce !== undefined && old.announce !== sig.announce) changed.push({ t, kind:'EDIT' });
-      console.log(`${sig.open ? 'OPEN!!!  ' : sig.soldOut ? 'soldout  ' : 'unclear  '} ${t.id}`);
-      if (!sig.open && !sig.soldOut) {
-        const named = new RegExp(t.id.split('-')[0], 'i').test(text);
-        const i = text.search(/availab|fully|booked|kamer|room type|comfy|deluxe/i);
-        console.log(`  ...offer fingerprint=${sig.offer || 'n/a'} (${sig.offerLen} chars), name found=${named}`);
+      if (!warmed) throw new Error('warm-up failed, skipping');
+      const res = await withTimeout(checkXior(page, prop), 60000, `query ${prop.id}`);
+      const available = res.openTypes.length > 0;
+      next[prop.id] = {
+        ok: true, available, byRoom: res.byRoom, openTypes: res.openTypes,
+        units: res.units, unknownStreak: 0, checked: new Date().toISOString(),
+      };
+      const counts = Object.entries(res.byRoom).map(([id, n]) => `${prop.rooms[id].split(' ')[0]}=${n}`).join(' ');
+      console.log(`${available ? 'AVAILABLE ' : 'none      '} ${prop.id}  [${counts}]`);
+
+      const wasAvailable = old.ok && old.available;
+      const oldOpen = new Set(old.openTypes || []);
+      const newPriority = prop.priority.filter(id => res.openTypes.includes(String(id)) && !oldOpen.has(String(id)));
+
+      if (available && !wasAvailable) {
+        await sendText(`ROOMS AVAILABLE — ${prop.label}`,
+          [`Xior is first-come-first-served — move now.`, '', describeUnits(res.units) || '(unit list not returned — open the page and click Check availability)', '', `Property page: ${prop.url}`].join('\n'));
+      } else if (available && newPriority.length) {
+        await sendText(`Comfy now available — ${prop.label}`,
+          [describeUnits(res.units.filter(u => newPriority.some(id => u.type === prop.rooms[id]))), '', `Property page: ${prop.url}`].join('\n'));
+      } else if (!available && wasAvailable) {
+        await sendText(`Full again — ${prop.label}`, 'All room types show zero units. Watching continues.');
       }
     } catch (e) {
-      failures++;
-      next[t.id] = { ...(prev[t.id]||{}), ok:false, error:String(e.message).slice(0,200), checked:new Date().toISOString() };
-      console.error(`FAILED ${t.id}: ${e.message.slice(0,140)}`);
-    } finally { await page.close().catch(()=>{}); }
+      const streak = (old.unknownStreak || 0) + 1;
+      next[prop.id] = { ...old, ok: false, unknownStreak: streak, error: String(e.message).slice(0,200), checked: new Date().toISOString() };
+      console.error(`UNKNOWN   ${prop.id}: ${e.message.slice(0,140)} (streak ${streak})`);
+      if (streak === BLIND_AFTER) {
+        await sendText(`Can't read ${prop.label}`, `The availability endpoint has not given a usable answer for ${streak} runs in a row. Silence about this building is NOT "no rooms" until this clears.\n\nLast error: ${e.message.slice(0,160)}`);
+      }
+    }
   }
 
-  console.log(`--- ${changed.length} change(s) to report ---`);
-  for (const c of changed) {
-    const urgent = c.kind === 'OPEN' || c.kind === 'OFFER';
-    let deep = null;
-    if (urgent) {
-      console.log(`  deep look at ${c.t.id}...`);
-      deep = await withTimeout(deepCapture(ctx, c.t), 120000, `deep ${c.t.id}`)
-        .catch(e => ({ rows:[], deepest:c.t.url, shot:null, note:`Deep look timed out (${e.message.slice(0,60)}).` }));
+  // The Social Hub, judged on wording alone.
+  {
+    const old = prev[SOCIAL_HUB.id] || {};
+    try {
+      const text = await withTimeout(loadReady(page, SOCIAL_HUB.url, /social hub|student|room|book/i), 150000, 'social hub');
+      const soldOut = SH_SOLD_OUT.test(text);
+      next[SOCIAL_HUB.id] = { ok: true, soldOut, unknownStreak: 0, checked: new Date().toISOString() };
+      console.log(`${soldOut ? 'soldout   ' : 'NOT SOLD OUT'} social-hub`);
+      if (!soldOut && old.ok && old.soldOut) {
+        await sendText(`Wording changed — ${SOCIAL_HUB.label}`, `The page no longer says it is sold out. Go and look.\n\n${SOCIAL_HUB.url}`);
+      }
+    } catch (e) {
+      const streak = (old.unknownStreak || 0) + 1;
+      next[SOCIAL_HUB.id] = { ...old, ok: false, unknownStreak: streak, error: String(e.message).slice(0,200), checked: new Date().toISOString() };
+      console.error(`UNKNOWN   social-hub: ${e.message.slice(0,140)}`);
     }
-    const head = c.kind === 'OPEN'  ? `ROOMS OPEN — ${c.t.label}`
-               : c.kind === 'OFFER' ? `ROOM LISTING CHANGED — ${c.t.label}`
-               :                      `Page changed — ${c.t.label}`;
-    const lines = [
-      c.kind === 'OPEN'  ? 'Units are listed. Xior is first-come-first-served — move now.'
-    : c.kind === 'OFFER' ? 'The room section changed, which is how a new release shows up. Open it and click Check availability.'
-    :                      'Wording about upcoming releases changed.',
-      '', `Property page: ${c.t.url}`,
-    ];
-    if (deep) {
-      if (deep.deepest && deep.deepest !== c.t.url) lines.push(`Deepest step reached: ${deep.deepest}`);
-      if (deep.rows.length) lines.push('', 'Seen on the page:', ...deep.rows.map(r => `• ${r}`));
-      if (deep.note) lines.push('', deep.note);
-      lines.push('', 'Then: €75 fee immediately → 5 days for contract + first month + 2-month deposit (~€3,300).');
-    }
-    await sendText(head, lines.join('\n'));
-    if (deep?.shot) await sendPhoto(deep.shot, `${head}\n${deep.deepest}`);
   }
+
+  await page.close().catch(()=>{});
+  const failures = Object.values(next).filter(v => !v.ok).length;
   return { next, failures };
 }
 
+// ---------- release-day cadence -------------------------------------------
 // Xior reportedly batch-releases around the 1st of the month. GitHub cannot
-// schedule tighter than every 5 minutes, so on that day we stay in one run
-// and re-check every minute instead.
-//
-// The 1st that matters is the DUTCH 1st, not the UTC one. In February the
-// Netherlands is UTC+1, so Groningen midnight on the 1st is 23:00 UTC on the
-// 31st -- exactly the hour a release would land, and exactly the hour a
-// getUTCDate() check would have called an ordinary day.
+// schedule tighter than every 5 minutes, so on the DUTCH 1st we stay in one
+// run and re-check every minute instead.
 const nlToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Amsterdam' });
 const isReleaseDay = nlToday.endsWith('-01');
 const PASSES = isReleaseDay ? 5 : 1;
 console.log(`date in Groningen: ${nlToday}${isReleaseDay ? '  <-- RELEASE DAY' : ''}`);
-if (isReleaseDay) console.log('release day (1st): repeating the check every 60s within this run');
 
 let state = readState();
 let lastFailures = 0;
 let browser;
-
 try {
   browser = await chromium.launch({ args: ['--disable-blink-features=AutomationControlled'] });
   const ctx = await browser.newContext({
-    userAgent: UA,
-    viewport: { width:1440, height:900 },
-    locale: 'en-GB',
+    userAgent: UA, viewport: { width:1440, height:900 }, locale: 'en-GB',
     extraHTTPHeaders: { 'Accept-Language':'en-GB,en;q=0.9,nl;q=0.8', 'Upgrade-Insecure-Requests':'1' },
   });
-
   for (let p = 1; p <= PASSES; p++) {
     if (p > 1) { console.log('--- waiting 60s ---'); await sleep(60000); }
-    const { next, failures } = await onePass(ctx, state, p, PASSES);
-    state = next;
-    lastFailures = failures;
+    console.log(`--- pass ${p}/${PASSES} ---`);
+    const { next, failures } = await onePass(ctx, state);
+    state = next; lastFailures = failures;
     saveState(state);
   }
 } catch (e) {
@@ -326,8 +292,9 @@ try {
 }
 
 saveState(state);
-if (lastFailures === TARGETS.length) {
-  await sendText('Xior watcher is blind', 'Every page failed to load. Silence from now on would NOT mean "no rooms" — check the GitHub Actions log.');
+const total = XIOR.length + 1;
+if (lastFailures === total) {
+  await sendText('Xior watcher is blind', 'Nothing could be read this run. Silence from now on would NOT mean "no rooms" — check the GitHub Actions log.');
 }
-console.log(`done — ${lastFailures} failure(s) on final pass`);
+console.log(`done — ${lastFailures} of ${total} unreadable on final pass`);
 process.exit(0);
