@@ -1,15 +1,26 @@
 {
   "eendrachtskade": {
     "ok": true,
-    "available": false,
+    "available": true,
     "byRoom": {
-      "29888": 0,
+      "29888": 1,
       "32266": 0
     },
-    "openTypes": [],
-    "units": [],
+    "openTypes": [
+      "29888"
+    ],
+    "units": [
+      {
+        "type": "Comfy (from €615)",
+        "name": "2-124",
+        "sqm": 19,
+        "date": "01/11/2026",
+        "rent": 623,
+        "apply": "https://eendrachtskade-xiorstudenthousing.securerc.co.uk/onlineleasing/xior-eendrachtskade-nlgeends/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185832&floorPlans=1111685&UnitTypeId=34676&ATId=3281&SchoolId=648&rentallevel=1&header=1"
+      }
+    ],
     "unknownStreak": 0,
-    "checked": "2026-10-01T00:58:18.258Z"
+    "checked": "2026-10-01T01:08:08.672Z"
   },
   "zernike-tower": {
     "ok": true,
@@ -21,7 +32,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-01T00:58:18.723Z"
+    "checked": "2026-10-01T01:08:09.070Z"
   },
   "oosterhamrikkade": {
     "ok": true,
@@ -32,24 +43,52 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-01T00:58:19.310Z"
+    "checked": "2026-10-01T01:08:09.548Z"
   },
   "zernike-short": {
     "ok": true,
-    "available": false,
+    "available": true,
     "byRoom": {
-      "32268": 0,
-      "32269": 0
+      "32268": 2,
+      "32269": 1
     },
-    "openTypes": [],
-    "units": [],
+    "openTypes": [
+      "32268",
+      "32269"
+    ],
+    "units": [
+      {
+        "type": "Comfy",
+        "name": "1-161",
+        "sqm": 19,
+        "date": "01/10/2026",
+        "rent": 1369.99,
+        "apply": "https://hoogeweg1-xiorstudenthousing.securerc.co.uk/onlineleasing/nlghoogs-hoogeweg-1-groningen/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185180&floorPlans=1109040&UnitTypeId=28341&ATId=18429&SchoolId=648&rentallevel=1&header=1"
+      },
+      {
+        "type": "Comfy",
+        "name": "1-170",
+        "sqm": 21,
+        "date": "01/11/2026",
+        "rent": 1369.99,
+        "apply": "https://hoogeweg1-xiorstudenthousing.securerc.co.uk/onlineleasing/nlghoogs-hoogeweg-1-groningen/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185180&floorPlans=1109040&UnitTypeId=28341&ATId=18429&SchoolId=648&rentallevel=1&header=1"
+      },
+      {
+        "type": "Deluxe",
+        "name": "1-041",
+        "sqm": 21,
+        "date": "01/11/2026",
+        "rent": 1391.2,
+        "apply": "https://hoogeweg1-xiorstudenthousing.securerc.co.uk/onlineleasing/nlghoogs-hoogeweg-1-groningen/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185180&floorPlans=1109043&UnitTypeId=28343&ATId=18429&SchoolId=648&rentallevel=1&header=1"
+      }
+    ],
     "unknownStreak": 0,
-    "checked": "2026-10-01T00:58:19.781Z"
+    "checked": "2026-10-01T01:08:10.416Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-10-01T00:58:22.689Z"
+    "checked": "2026-10-01T01:08:13.894Z"
   }
 }
