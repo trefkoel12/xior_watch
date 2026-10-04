@@ -9,7 +9,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-04T23:23:27.578Z"
+    "checked": "2026-10-04T23:53:36.070Z"
   },
   "zernike-tower": {
     "ok": true,
@@ -21,7 +21,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-04T23:23:28.011Z"
+    "checked": "2026-10-04T23:53:36.418Z"
   },
   "oosterhamrikkade": {
     "ok": true,
@@ -32,10 +32,10 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-04T23:23:28.970Z"
+    "checked": "2026-10-04T23:53:36.835Z"
   },
   "zernike-short": {
-    "ok": false,
+    "ok": true,
     "available": true,
     "byRoom": {
       "32268": 1,
@@ -63,14 +63,13 @@
         "apply": "https://hoogeweg1-xiorstudenthousing.securerc.co.uk/onlineleasing/nlghoogs-hoogeweg-1-groningen/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185180&floorPlans=1109043&UnitTypeId=28343&ATId=18429&SchoolId=648&rentallevel=1&header=1"
       }
     ],
-    "unknownStreak": 1,
-    "checked": "2026-10-04T23:23:59.393Z",
-    "error": "Yardi errorCode 500 (cURL error 28: Operation timed out after 30002 milliseconds with 0 bytes received)"
+    "unknownStreak": 0,
+    "checked": "2026-10-04T23:53:38.552Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-10-04T23:24:03.084Z"
+    "checked": "2026-10-04T23:53:42.275Z"
   }
 }
