@@ -9,7 +9,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-04T05:23:25.400Z"
+    "checked": "2026-10-04T05:53:22.670Z"
   },
   "zernike-tower": {
     "ok": true,
@@ -21,7 +21,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-04T05:23:25.893Z"
+    "checked": "2026-10-04T05:53:23.254Z"
   },
   "oosterhamrikkade": {
     "ok": true,
@@ -32,7 +32,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-04T05:23:26.411Z"
+    "checked": "2026-10-04T05:53:23.802Z"
   },
   "zernike-short": {
     "ok": true,
@@ -64,12 +64,12 @@
       }
     ],
     "unknownStreak": 0,
-    "checked": "2026-10-04T05:23:28.181Z"
+    "checked": "2026-10-04T05:53:25.242Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-10-04T05:23:31.022Z"
+    "checked": "2026-10-04T05:53:28.214Z"
   }
 }
