@@ -9,7 +9,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-14T22:53:24.197Z"
+    "checked": "2026-10-14T23:23:21.659Z"
   },
   "zernike-tower": {
     "ok": true,
@@ -21,18 +21,19 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-14T22:53:24.698Z"
+    "checked": "2026-10-14T23:23:22.145Z"
   },
   "oosterhamrikkade": {
-    "ok": true,
+    "ok": false,
     "available": false,
     "byRoom": {
       "29894": 0
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 0,
-    "checked": "2026-10-14T22:53:25.159Z"
+    "unknownStreak": 1,
+    "checked": "2026-10-14T23:23:22.630Z",
+    "error": "Yardi errorCode 500 (cURL error 28: Operation timed out after 30002 milliseconds with 0 bytes received)"
   },
   "zernike-short": {
     "ok": true,
@@ -44,12 +45,12 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-14T22:53:25.676Z"
+    "checked": "2026-10-14T23:23:23.069Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-10-14T22:53:28.728Z"
+    "checked": "2026-10-14T23:23:26.057Z"
   }
 }
