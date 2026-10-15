@@ -9,7 +9,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-15T11:53:19.429Z"
+    "checked": "2026-10-15T12:23:23.443Z"
   },
   "zernike-tower": {
     "ok": true,
@@ -21,7 +21,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-15T11:53:20.490Z"
+    "checked": "2026-10-15T12:23:23.985Z"
   },
   "oosterhamrikkade": {
     "ok": true,
@@ -32,10 +32,10 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-10-15T11:53:21.382Z"
+    "checked": "2026-10-15T12:23:31.550Z"
   },
   "zernike-short": {
-    "ok": true,
+    "ok": false,
     "available": false,
     "byRoom": {
       "32268": 0,
@@ -43,13 +43,14 @@
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 0,
-    "checked": "2026-10-15T11:53:22.137Z"
+    "unknownStreak": 1,
+    "checked": "2026-10-15T12:23:32.468Z",
+    "error": "page.evaluate: TypeError: Failed to fetch\n    at eval (eval at evaluate (:234:30), <anonymous>:6:21)\n    at UtilityScript.evaluate (<anonymous>:236:17)\n    at UtilityScript.<anonymous> (<anonymous>:1:"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-10-15T11:53:25.624Z"
+    "checked": "2026-10-15T12:23:35.221Z"
   }
 }
