@@ -4,11 +4,10 @@
     "available": true,
     "byRoom": {
       "29888": 2,
-      "32266": 1
+      "32266": 0
     },
     "openTypes": [
-      "29888",
-      "32266"
+      "29888"
     ],
     "units": [
       {
@@ -26,18 +25,10 @@
         "date": "01/12/2027",
         "rent": 754,
         "apply": "https://eendrachtskade-xiorstudenthousing.securerc.co.uk/onlineleasing/xior-eendrachtskade-nlgeends/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185832&floorPlans=1111685&UnitTypeId=34676&ATId=3281&SchoolId=648&rentallevel=1&header=1"
-      },
-      {
-        "type": "Deluxe (from €800)",
-        "name": "2-266",
-        "sqm": 90,
-        "date": "01/12/2026",
-        "rent": 1310,
-        "apply": "https://eendrachtskade-xiorstudenthousing.securerc.co.uk/onlineleasing/xior-eendrachtskade-nlgeends/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185832&floorPlans=1111686&UnitTypeId=34680&ATId=3281&SchoolId=648&rentallevel=1&header=1"
       }
     ],
     "unknownStreak": 0,
-    "checked": "2026-11-04T02:23:28.575Z"
+    "checked": "2026-11-04T02:53:30.022Z"
   },
   "zernike-tower": {
     "ok": true,
@@ -49,7 +40,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-04T02:23:29.502Z"
+    "checked": "2026-11-04T02:53:30.537Z"
   },
   "oosterhamrikkade": {
     "ok": true,
@@ -60,7 +51,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-04T02:23:29.973Z"
+    "checked": "2026-11-04T02:53:31.068Z"
   },
   "zernike-short": {
     "ok": true,
@@ -72,12 +63,12 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-04T02:23:30.443Z"
+    "checked": "2026-11-04T02:53:32.220Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-11-04T02:23:33.472Z"
+    "checked": "2026-11-04T02:53:36.403Z"
   }
 }
