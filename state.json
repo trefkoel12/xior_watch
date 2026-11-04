@@ -1,6 +1,6 @@
 {
   "eendrachtskade": {
-    "ok": false,
+    "ok": true,
     "available": false,
     "byRoom": {
       "29888": 0,
@@ -8,12 +8,11 @@
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 1,
-    "checked": "2026-11-04T12:54:05.115Z",
-    "error": "warm-up failed, skipping"
+    "unknownStreak": 0,
+    "checked": "2026-11-04T13:23:23.346Z"
   },
   "zernike-tower": {
-    "ok": false,
+    "ok": true,
     "available": false,
     "byRoom": {
       "29907": 0,
@@ -21,24 +20,22 @@
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 1,
-    "checked": "2026-11-04T12:54:05.115Z",
-    "error": "warm-up failed, skipping"
+    "unknownStreak": 0,
+    "checked": "2026-11-04T13:23:24.106Z"
   },
   "oosterhamrikkade": {
-    "ok": false,
+    "ok": true,
     "available": false,
     "byRoom": {
       "29894": 0
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 1,
-    "checked": "2026-11-04T12:54:05.115Z",
-    "error": "warm-up failed, skipping"
+    "unknownStreak": 0,
+    "checked": "2026-11-04T13:23:24.648Z"
   },
   "zernike-short": {
-    "ok": false,
+    "ok": true,
     "available": false,
     "byRoom": {
       "32268": 0,
@@ -46,14 +43,13 @@
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 1,
-    "checked": "2026-11-04T12:54:05.115Z",
-    "error": "warm-up failed, skipping"
+    "unknownStreak": 0,
+    "checked": "2026-11-04T13:23:25.257Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-11-04T12:54:07.986Z"
+    "checked": "2026-11-04T13:23:28.167Z"
   }
 }
