@@ -1,34 +1,15 @@
 {
   "eendrachtskade": {
     "ok": true,
-    "available": true,
+    "available": false,
     "byRoom": {
-      "29888": 2,
+      "29888": 0,
       "32266": 0
     },
-    "openTypes": [
-      "29888"
-    ],
-    "units": [
-      {
-        "type": "Comfy (from €615)",
-        "name": "2-081",
-        "sqm": 19,
-        "date": "01/01/2028",
-        "rent": 623,
-        "apply": "https://eendrachtskade-xiorstudenthousing.securerc.co.uk/onlineleasing/xior-eendrachtskade-nlgeends/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185832&floorPlans=1111685&UnitTypeId=34676&ATId=3281&SchoolId=648&rentallevel=1&header=1"
-      },
-      {
-        "type": "Comfy (from €615)",
-        "name": "2-085",
-        "sqm": 24,
-        "date": "01/02/2028",
-        "rent": 623,
-        "apply": "https://eendrachtskade-xiorstudenthousing.securerc.co.uk/onlineleasing/xior-eendrachtskade-nlgeends/oleapplication.aspx?stepname=RentalOptions&myLeaseCafeType=2&myOlePropertyId=185832&floorPlans=1111685&UnitTypeId=34676&ATId=3281&SchoolId=648&rentallevel=1&header=1"
-      }
-    ],
+    "openTypes": [],
+    "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-11T09:43:28.810Z"
+    "checked": "2026-11-11T10:13:25.220Z"
   },
   "zernike-tower": {
     "ok": true,
@@ -40,7 +21,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-11T09:43:29.391Z"
+    "checked": "2026-11-11T10:13:26.426Z"
   },
   "oosterhamrikkade": {
     "ok": true,
@@ -51,7 +32,7 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-11T09:43:29.986Z"
+    "checked": "2026-11-11T10:13:26.986Z"
   },
   "zernike-short": {
     "ok": true,
@@ -82,12 +63,12 @@
       }
     ],
     "unknownStreak": 0,
-    "checked": "2026-11-11T09:43:30.636Z"
+    "checked": "2026-11-11T10:13:27.595Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-11-11T09:43:33.540Z"
+    "checked": "2026-11-11T10:13:31.102Z"
   }
 }
