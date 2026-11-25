@@ -9,10 +9,10 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-25T12:33:19.577Z"
+    "checked": "2026-11-25T13:03:23.713Z"
   },
   "zernike-tower": {
-    "ok": false,
+    "ok": true,
     "available": false,
     "byRoom": {
       "29907": 0,
@@ -20,21 +20,19 @@
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 1,
-    "checked": "2026-11-25T12:33:27.731Z",
-    "error": "page.evaluate: TypeError: Failed to fetch\n    at eval (eval at evaluate (:234:30), <anonymous>:6:21)\n    at UtilityScript.evaluate (<anonymous>:236:17)\n    at UtilityScript.<anonymous> (<anonymous>:1:"
+    "unknownStreak": 0,
+    "checked": "2026-11-25T13:03:24.312Z"
   },
   "oosterhamrikkade": {
-    "ok": false,
+    "ok": true,
     "available": false,
     "byRoom": {
       "29894": 0
     },
     "openTypes": [],
     "units": [],
-    "unknownStreak": 1,
-    "checked": "2026-11-25T12:33:27.733Z",
-    "error": "page.evaluate: Execution context was destroyed, most likely because of a navigation"
+    "unknownStreak": 0,
+    "checked": "2026-11-25T13:03:24.951Z"
   },
   "zernike-short": {
     "ok": true,
@@ -46,12 +44,12 @@
     "openTypes": [],
     "units": [],
     "unknownStreak": 0,
-    "checked": "2026-11-25T12:33:36.214Z"
+    "checked": "2026-11-25T13:03:26.071Z"
   },
   "social-hub": {
     "ok": true,
     "soldOut": true,
     "unknownStreak": 0,
-    "checked": "2026-11-25T12:33:39.126Z"
+    "checked": "2026-11-25T13:03:29.692Z"
   }
 }
